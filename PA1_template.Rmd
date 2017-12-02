@@ -1,0 +1,138 @@
+---
+title: "ProjectWeek2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, error = FALSE, warning = FALSE, cache = TRUE)
+```
+
+## Loading and preprocessing the data
+
+This data analysis operates with [Activity monitoring data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip). Data .csv file should be placed in working directory prior to analysis. Data download and read-in code is below:
+```{r}
+if (!file.exists("datazip.zip")) {
+        url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+        download.file(url, "repdata%2Fdata%2Factivity.zip")
+}
+if (!file.exists("activity.csv")) {
+        unzip("repdata%2Fdata%2Factivity.zip", "activity.csv")
+}
+data1 <- read.csv("activity.csv")
+```
+
+## What is mean total number of steps taken per day?
+
+Analysis will include usage of "dplyr" and "tidyr" libraries. To check/load libraries code below should be executed:
+```{r}
+test <- require(dplyr)
+if (test==FALSE) {
+        install.packages("dplyr")
+        library(dplyr)
+}
+test <- require(tidyr)
+if (test==FALSE) {
+        install.packages("tidyr")
+        library(tidyr)
+}
+```
+
+Lets create table with total number of steps taken per day:
+```{r}
+stepdata <- data1 %>% group_by(date) %>% summarise(totalsteps=sum(steps, na.rm=TRUE))
+```
+
+Data column should be converted from factor to date:
+```{r}
+stepdata$date <- as.Date(as.character(stepdata$date))
+```
+
+Here is a histogram of total nuber of steps per day and code to generate it:
+```{r}
+hist(stepdata$totalsteps, xlab = "Total steps per day", ylab = "Number of days", main = "Histogram of total steps per day")
+```
+
+Now lets calculate mean and median of the total number of steps taken per day:
+```{r}
+print(c("Mean steps per date:", mean(stepdata$totalsteps)))
+print(c("Median steps per date:", median(stepdata$totalsteps)))
+```
+
+## What is the average daily activity pattern?
+
+We need to calculate avg number of steps per 5min interval with same ID (same day time):
+```{r}
+intvdata <- data1 %>% group_by(interval) %>% summarise(avgsteps=mean(steps, na.rm=TRUE))
+```
+
+Now lets plot average number of steps per interval during the day:
+```{r}
+plot(intvdata$interval, intvdata$avgsteps, type="l", xlab = "Interval ID during day", ylab = "Number of steps per 5min", main = "Avg number of steps per interval")
+```
+
+To find ID of the most active interval we use code:
+```{r}
+print(c("Most active intv ID:", intvdata$interval[which.max(intvdata$avgsteps)]))
+```
+
+## Imputing missing values
+
+First lets calculate total number of missing values in original dataset:
+```{r}
+print(c("Total number of missing values:", sum(is.na(data1$steps))))
+```
+
+lets fill in missing values with mean number of steps taken per intervals with same ID. Here is the cycle that goes row to row, check for NA and fill it if needed:
+```{r}
+data2 <- data1
+maxrow <- dim(data1)[1]
+for (i in 1:maxrow) {
+        if (is.na(data1$steps[i])==TRUE) {
+        data2[i,1] <- intvdata$avgsteps[which(intvdata$interval == data1[i,3])]
+        }
+}
+```
+
+Now we have dataset "data2" free from missing values. Now lets make a histogram of steps taken per day:
+```{r}
+stepdata2 <- data2 %>% group_by(date) %>% summarise(totalsteps=sum(steps, na.rm=TRUE))
+stepdata2$date <- as.Date(as.character(stepdata2$date))
+hist(stepdata2$totalsteps, xlab = "Total steps per day", ylab = "Number of days", main = "Histogram of total steps per day")
+```
+
+Here is new calculations of mean and median of the total number of steps taken per day:
+```{r}
+print(c("Mean steps per date:", mean(stepdata2$totalsteps)))
+print(c("Median steps per date:", median(stepdata2$totalsteps)))
+```
+
+As we can see histogram of data without NA has more normal distribution.
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+To difirintiate days we will add column with weekday and transform it two factor column. Then we can subset "data2" to two separate data frames for weekdays and weekends:
+```{r}
+Sys.setlocale("LC_ALL","English")
+data2$date <- as.Date(as.character(data2$date))
+data2 <- mutate(data2, weekday = weekdays(date, abbreviate = TRUE))
+for (i in 1:dim(data2)[1]) {
+        if ((data2[i,4] == "Sat")|(data2[i,4] == "Sun")) {
+        data2[i,4] <- "weekend"
+        }
+        else {
+        data2[i,4] <- "weekday"  
+        }
+}
+data2$weekday <- as.factor(data2$weekday)
+data2end <- subset(data2, weekday == "weekend")
+data2day <- subset(data2, weekday == "weekday")
+intvdata2end <- data2end %>% group_by(interval) %>% summarise(avgsteps=mean(steps, na.rm=TRUE))
+intvdata2day <- data2day %>% group_by(interval) %>% summarise(avgsteps=mean(steps, na.rm=TRUE))
+```
+
+Now we can compare weekdays and weekends activities by plotting them together:
+```{r}
+par(mfcol=c(2,1))
+plot(intvdata2day$interval, intvdata2day$avgsteps, type="l", xlab = "Interval ID during day", ylab = "Number of steps per 5min", main = "Weekday: Avg number of steps per interval", ylim = c(0,200))
+plot(intvdata2end$interval, intvdata2end$avgsteps, type="l", xlab = "Interval ID during day", ylab = "Number of steps per 5min", main = "Weekend: Avg number of steps per interval", ylim = c(0,200))
+```
